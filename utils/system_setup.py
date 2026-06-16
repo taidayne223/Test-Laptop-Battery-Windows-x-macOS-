@@ -115,6 +115,87 @@ def enable_windows_bluetooth():
     except Exception as e:
         print(f"[WARNING] Could not check/enable Bluetooth: {e}")
 
+def switch_macos_input_to_us():
+    import ctypes
+    import ctypes.util
+    
+    def get_cfstring_value(cf_string_ref):
+        if not cf_string_ref:
+            return None
+        try:
+            cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreFoundation'))
+            cf.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint]
+            cf.CFStringGetCString.restype = ctypes.c_bool
+            buf = ctypes.create_string_buffer(512)
+            if cf.CFStringGetCString(cf_string_ref, buf, 512, 0x08000100):
+                return buf.value.decode('utf-8')
+        except Exception:
+            pass
+        return None
+
+    try:
+        carbon_path = ctypes.util.find_library('Carbon')
+        if not carbon_path:
+            print("[WARNING] Carbon library not found, cannot switch input source")
+            return False
+            
+        carbon = ctypes.cdll.LoadLibrary(carbon_path)
+        cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreFoundation'))
+        
+        # Define TIS functions
+        carbon.TISCreateInputSourceList.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+        carbon.TISCreateInputSourceList.restype = ctypes.c_void_p
+        
+        carbon.TISGetInputSourceProperty.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        carbon.TISGetInputSourceProperty.restype = ctypes.c_void_p
+        
+        carbon.TISSelectInputSource.argtypes = [ctypes.c_void_p]
+        carbon.TISSelectInputSource.restype = ctypes.c_int
+        
+        cf.CFArrayGetCount.argtypes = [ctypes.c_void_p]
+        cf.CFArrayGetCount.restype = ctypes.c_long
+        
+        cf.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_long]
+        cf.CFArrayGetValueAtIndex.restype = ctypes.c_void_p
+        
+        cf.CFRelease.argtypes = [ctypes.c_void_p]
+        
+        kTISPropertyInputSourceID = ctypes.c_void_p.in_dll(carbon, 'kTISPropertyInputSourceID')
+        
+        sources_list = carbon.TISCreateInputSourceList(None, False)
+        if not sources_list:
+            print("[WARNING] Failed to retrieve input sources list")
+            return False
+            
+        count = cf.CFArrayGetCount(sources_list)
+        target_source_ref = None
+        for i in range(count):
+            source_ref = cf.CFArrayGetValueAtIndex(sources_list, i)
+            if not source_ref:
+                continue
+                
+            source_id_ref = carbon.TISGetInputSourceProperty(source_ref, kTISPropertyInputSourceID)
+            source_id = get_cfstring_value(source_id_ref)
+            if source_id == "com.apple.keylayout.US":
+                target_source_ref = source_ref
+                break
+                
+        if target_source_ref:
+            status = carbon.TISSelectInputSource(target_source_ref)
+            if status == 0:
+                print("[OK] Switched macOS input source to U.S.")
+                cf.CFRelease(sources_list)
+                return True
+            else:
+                print(f"[WARNING] Failed to switch input source (OSStatus: {status})")
+        else:
+            print("[WARNING] U.S. Input source (com.apple.keylayout.US) not found in enabled keyboard layouts")
+            
+        cf.CFRelease(sources_list)
+    except Exception as e:
+        print(f"[WARNING] Could not switch macOS input source: {e}")
+    return False
+
 def optimize_system():
     system = platform.system()
     print("=================================================================")
@@ -270,6 +351,9 @@ def optimize_system():
             print("[OK] Enabled macOS Dark Mode")
         except Exception as e:
             print(f"[WARNING] Could not enable macOS Dark Mode: {e}")
+
+        # 6. Switch input source to U.S. (com.apple.keylayout.US)
+        switch_macos_input_to_us()
 
     # Check internet connection
     try:

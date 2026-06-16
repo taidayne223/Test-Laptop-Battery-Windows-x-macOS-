@@ -4,7 +4,7 @@ import webbrowser
 import os
 import platform
 from utils.battery_utils import get_battery_level
-from utils import clean_browser, open_in_browser, close_active_tab
+from utils import clean_browser, open_in_browser, close_active_tab, find_default_browser_mac
 
 def run_youtube_test(duration=None):
 
@@ -41,9 +41,11 @@ def run_youtube_test(duration=None):
         # Perform hard refresh to clear cache and ensure video playback starts correctly
         if platform_name == 'Darwin':
             # Cmd+Shift+R for Chrome/Edge/Firefox, Cmd+Opt+R for Safari on macOS
-            pyautogui.hotkey('command', 'shift', 'r')
-            time.sleep(0.5)
-            pyautogui.hotkey('command', 'option', 'r')
+            browser = find_default_browser_mac()
+            if browser == 'Safari':
+                pyautogui.hotkey('command', 'option', 'r')
+            else:
+                pyautogui.hotkey('command', 'shift', 'r')
         else:
             # Ctrl+Shift+R on Windows
             pyautogui.hotkey('ctrl', 'shift', 'r')
