@@ -181,26 +181,104 @@ def find_edge_path():
                 return path
     return None
 
+def find_default_browser_path_windows():
+    try:
+        import winreg
+        import shlex
+        
+        path = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
+            prog_id, _ = winreg.QueryValueEx(key, "ProgId")
+            
+        cmd_string = None
+        for root in [winreg.HKEY_CURRENT_USER, winreg.HKEY_CLASSES_ROOT]:
+            if root == winreg.HKEY_CURRENT_USER:
+                cmd_path = fr"Software\Classes\{prog_id}\shell\open\command"
+            else:
+                cmd_path = fr"{prog_id}\shell\open\command"
+            try:
+                with winreg.OpenKey(root, cmd_path) as key:
+                    cmd_string, _ = winreg.QueryValueEx(key, "")
+                    if cmd_string:
+                        break
+            except FileNotFoundError:
+                continue
+                
+        if cmd_string:
+            parts = shlex.split(cmd_string)
+            if parts:
+                exe_path = parts[0]
+                if os.path.exists(exe_path):
+                    return exe_path
+    except Exception:
+        pass
+    return None
+
+def find_default_browser_mac():
+    import plistlib
+    try:
+        plist_path = os.path.expanduser("~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist")
+        if os.path.exists(plist_path):
+            with open(plist_path, "rb") as f:
+                data = plistlib.load(f)
+                handlers = data.get("LSHandlers", [])
+                for handler in handlers:
+                    if handler.get("LSHandlerURLScheme") == "https":
+                        bundle_id = handler.get("LSHandlerRoleAll")
+                        mapping = {
+                            "com.google.chrome": "Google Chrome",
+                            "com.microsoft.edgemac": "Microsoft Edge",
+                            "org.mozilla.firefox": "Firefox",
+                            "com.apple.safari": "Safari"
+                        }
+                        return mapping.get(bundle_id, "Safari")
+    except Exception:
+        pass
+    return "Safari"
+
 def open_in_browser(url, use_extension=False):
     import webbrowser
     system = platform.system()
-    chrome_path = find_chrome_path()
     
-    browser_path = None
-    if chrome_path:
-        browser_path = chrome_path
-    elif system == "Windows":
-        browser_path = find_edge_path()
+    if system == "Windows":
+        default_path = find_default_browser_path_windows()
+        if default_path:
+            name = os.path.basename(default_path).lower()
+            if any(browser in name for browser in ["chrome", "msedge", "opera"]):
+                args = [
+                    default_path,
+                    "--disable-session-crashed-bubble",
+                    "--hide-crash-restore-bubble",
+                    url
+                ]
+                print(f"Launching default browser ({name}) with flags: {' '.join(args)}")
+                subprocess.Popen(args)
+                return
+            else:
+                print(f"Launching default browser ({name}): {default_path}")
+                subprocess.Popen([default_path, url])
+                return
+                
+    elif system == "Darwin":
+        default_app = find_default_browser_mac()
+        if default_app in ["Google Chrome", "Microsoft Edge"]:
+            args = [
+                "open",
+                "-a",
+                default_app,
+                "--args",
+                "--disable-session-crashed-bubble",
+                "--hide-crash-restore-bubble",
+                url
+            ]
+            print(f"Launching default browser ({default_app}) with flags: {' '.join(args)}")
+            subprocess.Popen(args)
+            return
+        else:
+            print(f"Launching default browser ({default_app})")
+            subprocess.Popen(["open", "-a", default_app, url])
+            return
 
-    if browser_path:
-        args = [
-            browser_path,
-            "--disable-session-crashed-bubble",
-            "--hide-crash-restore-bubble"
-        ]
-        args.append(url)
-        print(f"Launching browser with flags: {' '.join(args)}")
-        subprocess.Popen(args)
-    else:
-        print("Chrome/Edge not found, falling back to webbrowser.open...")
-        webbrowser.open(url)
+    # Fallback
+    print("Falling back to webbrowser.open...")
+    webbrowser.open(url)
