@@ -10,7 +10,7 @@ if %errorLevel% == 0 (
     echo  Requesting Administrator privileges to automate
     echo  brightness and CABC settings...
     echo ===================================================
-    powershell -Command "Start-Process -FilePath '%0' -Verb RunAs"
+    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
     exit /b
 )
 
