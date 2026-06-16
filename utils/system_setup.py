@@ -115,6 +115,26 @@ def enable_windows_bluetooth():
     except Exception as e:
         print(f"[WARNING] Could not check/enable Bluetooth: {e}")
 
+def set_macos_brightness(brightness_level=0.75):
+    import ctypes
+    import ctypes.util
+    try:
+        cg_path = ctypes.util.find_library('CoreGraphics')
+        if not cg_path:
+            return False
+        cg = ctypes.CDLL(cg_path)
+        main_display = cg.CGMainDisplayID()
+        
+        ds = ctypes.CDLL('/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices')
+        ds.DisplayServicesSetBrightness.argtypes = [ctypes.c_int, ctypes.c_float]
+        ds.DisplayServicesSetBrightness.restype = ctypes.c_int
+        
+        res = ds.DisplayServicesSetBrightness(main_display, ctypes.c_float(brightness_level))
+        return res == 0
+    except Exception:
+        pass
+    return False
+
 def switch_macos_input_to_us():
     import ctypes
     import ctypes.util
@@ -320,19 +340,19 @@ def optimize_system():
         print("[OK] Power Mode check: High Performance Mode is disabled by default")
 
         # 2. Set screen brightness to 75%
-        try:
+        print("[INFO] Configuring screen brightness...")
+        brightness_set = set_macos_brightness(0.75)
+        if brightness_set:
+            print("[OK] Set screen brightness to 75% (via DisplayServices)")
+        else:
             try:
-                import screen_brightness_control as sbc
-                sbc.set_brightness(75)
-                print("[OK] Set screen brightness to 75% (via screen-brightness-control)")
-            except Exception:
                 # 16 taps of key code 144 (brightness down) to set to 0, then 12 taps of 145 (brightness up) to set to 75%
                 script = 'tell application "System Events" to repeat 16 times\nkey code 144\ndelay 0.01\nend repeat\n' \
                          'tell application "System Events" to repeat 12 times\nkey code 145\ndelay 0.01\nend repeat'
                 subprocess.run(["osascript", "-e", script], capture_output=True, check=True)
-                print("[OK] Set screen brightness to 75% (via AppleScript)")
-        except Exception as e:
-            print("[WARNING] Could not set screen brightness. On Mac, you can ask Siri: 'Set screen brightness to 75%'.")
+                print("[OK] Set screen brightness to 75% (via AppleScript fallback)")
+            except Exception:
+                print("[WARNING] Could not set screen brightness automatically. Please set it manually to 75%.")
 
         # 3. Turn off auto turn off screen on battery power
         print("[OK] Sleep and display sleep prevention active via caffeinate wrapper")
