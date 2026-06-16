@@ -1,5 +1,20 @@
 @echo off
 cd /d "%~dp0"
+
+:: Check for administrator privileges
+net session >nul 2>&1
+if %errorLevel% == 0 (
+    goto :admin_start
+) else (
+    echo ===================================================
+    echo  Requesting Administrator privileges to automate
+    echo  brightness and CABC settings...
+    echo ===================================================
+    powershell -Command "Start-Process -FilePath '%0' -Verb RunAs"
+    exit /b
+)
+
+:admin_start
 title YouTube Battery Test Launcher
 echo ===================================================
 echo     YouTube Battery Test - Focus Launcher

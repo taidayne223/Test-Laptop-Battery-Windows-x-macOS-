@@ -132,22 +132,31 @@ def optimize_system():
 
         # 2. Set screen brightness to 75%
         try:
-            # First try using screen-brightness-control if available
+            # First try using powercfg (most robust, works on all Windows systems including ARM64/Snapdragon)
+            try:
+                subprocess.run(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", "SUB_VIDEO", "VIDEONORMALLEVEL", "75"], capture_output=True, check=True)
+                subprocess.run(["powercfg", "/setacvalueindex", "SCHEME_CURRENT", "SUB_VIDEO", "VIDEONORMALLEVEL", "75"], capture_output=True, check=True)
+                subprocess.run(["powercfg", "/setactive", "SCHEME_CURRENT"], capture_output=True, check=True)
+                print("[OK] Set screen brightness to 75% (via powercfg)")
+            except Exception as e_pcfg:
+                print(f"[WARNING] Could not set screen brightness via powercfg: {e_pcfg}")
+
+            # Also try screen-brightness-control to force instant driver update if supported
             try:
                 import screen_brightness_control as sbc
                 sbc.set_brightness(75)
-                print("[OK] Set screen brightness to 75% (via screen-brightness-control)")
+                print("[OK] Enforced screen brightness to 75% (via screen-brightness-control)")
             except Exception:
                 try:
                     # Try modern CimInstance (Windows 11 / PowerShell Core)
                     cmd = "Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods | Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{Timeout=1; Brightness=75}"
                     subprocess.run(["powershell", "-Command", cmd], capture_output=True, check=True)
-                    print("[OK] Set screen brightness to 75% (via CIM)")
+                    print("[OK] Enforced screen brightness to 75% (via CIM)")
                 except Exception:
                     # Fallback to WMI (legacy PowerShell)
                     cmd = "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, 75)"
                     subprocess.run(["powershell", "-Command", cmd], capture_output=True, check=True)
-                    print("[OK] Set screen brightness to 75% (via WMI)")
+                    print("[OK] Enforced screen brightness to 75% (via WMI)")
         except Exception as e:
             print(f"[WARNING] Could not set screen brightness: {e}")
 
@@ -189,11 +198,12 @@ def optimize_system():
             key_path = r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers"
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path, 0, winreg.KEY_SET_VALUE)
             winreg.SetValueEx(key, "CABCOption", 0, winreg.REG_DWORD, 0)
+            winreg.SetValueEx(key, "DisableCABC", 1, winreg.REG_DWORD, 1)
             winreg.CloseKey(key)
             print("[OK] Disabled 'Change brightness based on content' (CABC) in registry")
         except PermissionError:
             print("[WARNING] Could not disable 'Change brightness based on content' (CABC) in registry (Access Denied).")
-            print("          To automate this setting, run the launcher as Administrator, or manually turn it Off in Settings > Display > Brightness.")
+            print("          Please run the launcher as Administrator (right-click and 'Run as administrator') to apply this automatically.")
         except Exception as e:
             print(f"[WARNING] Could not disable 'Change brightness based on content' (CABC): {e}")
 
