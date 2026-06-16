@@ -33,15 +33,28 @@ def run_youtube_test(duration=None):
         # Wait for the browser and YouTube page to load
         time.sleep(8)
 
+        # Perform hard refresh to clear cache and ensure video playback starts correctly
+        if platform_name == 'Darwin':
+            # Cmd+Shift+R for Chrome/Edge/Firefox, Cmd+Opt+R for Safari on macOS
+            pyautogui.hotkey('command', 'shift', 'r')
+            time.sleep(0.5)
+            pyautogui.hotkey('command', 'option', 'r')
+        else:
+            # Ctrl+Shift+R on Windows
+            pyautogui.hotkey('ctrl', 'shift', 'r')
+        
+        # Wait for reload
+        time.sleep(5)
+
         # Press Escape to dismiss any popups (e.g., Chrome "Restore pages" popup)
         pyautogui.press('esc')
 
         # YouTube playback duration: 7 minutes per video (30% speedup from 10 minutes)
-        # Subtract the 9 seconds we already waited
+        # Subtract the 14 seconds we already waited (8s initial + 1s delay + 5s reload)
         if duration is not None:
             time.sleep(duration)
         else:
-            time.sleep(7 * 60 - 9)
+            time.sleep(7 * 60 - 14)
 
         get_battery_level()
         close_active_tab()
