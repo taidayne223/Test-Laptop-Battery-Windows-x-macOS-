@@ -46,6 +46,10 @@ def run_facebook_test():
 
     print("Simulating Facebook Newsfeed scrolling for 14 minutes...")
     while time.time() - start_time < total_duration:
+        # Dismiss any accidentally opened Reels/Stories modal or overlay to return focus to newsfeed
+        pyautogui.press('esc')
+        time.sleep(0.5)
+
         # Scroll down to simulate reading feed (increased to 8 times)
         custom_scroll(times=8, direction="down")
         
@@ -54,6 +58,8 @@ def run_facebook_test():
         
         # Occasionally scroll up a tiny bit to simulate reviewing a post (15% chance)
         if random.random() < 0.15:
+            pyautogui.press('esc')
+            time.sleep(0.5)
             custom_scroll(times=4, direction="up")
             time.sleep(3)
 
