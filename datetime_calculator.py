@@ -230,12 +230,178 @@ def detect_cycles(events):
             
     return cycles
 
+def get_device_specs():
+    import os
+    import platform
+    import subprocess
+    import re
+    import shutil
+
+    system = platform.system()
+    
+    # Get total RAM in GB using sysctl or wmic
+    ram_gb = 0
+    if system == "Darwin":
+        try:
+            res = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True)
+            if res.returncode == 0:
+                ram_gb = round(int(res.stdout.strip()) / (1024**3))
+        except Exception:
+            pass
+    elif system == "Windows":
+        try:
+            res = subprocess.run(["wmic", "computersystem", "get", "totalphysicalmemory"], capture_output=True)
+            if res.returncode == 0:
+                try:
+                    out = res.stdout.decode('utf-16').strip()
+                except Exception:
+                    out = res.stdout.decode('utf-8', errors='ignore').strip()
+                lines = [l.strip() for l in out.splitlines() if l.strip()]
+                if len(lines) > 1:
+                    ram_gb = round(int(lines[1]) / (1024**3))
+        except Exception:
+            pass
+            
+    # Get total Disk size in GB/TB
+    disk_str = ""
+    try:
+        path = "C:\\" if system == "Windows" else "/"
+        total_bytes = shutil.disk_usage(path)[0]
+        total_gb = total_bytes / (1024**3)
+        standards = [128, 256, 512, 1024, 2048]
+        closest = min(standards, key=lambda x: abs(x - total_gb))
+        disk_str = f"{closest // 1024}TB" if closest >= 1024 else f"{closest}GB"
+    except Exception:
+        pass
+
+    ram_disk_str = ""
+    if ram_gb > 0:
+        ram_disk_str = f"{ram_gb}GB"
+        if disk_str:
+            ram_disk_str = f"{ram_gb}/{disk_str}"
+
+    if system == "Darwin":
+        model = "Macbook"
+        cpu = "Apple Chip"
+        screen = ""
+        
+        # Get Model & CPU
+        try:
+            res = subprocess.run(["system_profiler", "SPHardwareDataType"], capture_output=True, text=True)
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    if "Model Name:" in line:
+                        model = line.split(":", 1)[1].strip()
+                    elif "Chip:" in line:
+                        cpu = line.split(":", 1)[1].strip()
+        except Exception:
+            pass
+            
+        # Get screen size from display resolution
+        try:
+            res = subprocess.run(["system_profiler", "SPDisplaysDataType"], capture_output=True, text=True)
+            if res.returncode == 0:
+                m_res = re.findall(r'Resolution:\s*(\d+)\s*x\s*(\d+)', res.stdout)
+                for w_str, h_str in m_res:
+                    w, h = int(w_str), int(h_str)
+                    if w == 3024 and h == 1964: screen = "14 inch"
+                    elif w == 3456 and h == 2234: screen = "16 inch"
+                    elif w == 2880 and h == 1864: screen = "15 inch"
+                    elif (w == 2560 and h == 1664) or (w == 2560 and h == 1600): screen = "13 inch"
+        except Exception:
+            pass
+            
+        if model.lower() == "macbook pro":
+            model = "Macbook Pro"
+        elif model.lower() == "macbook air":
+            model = "Macbook Air"
+            
+        cpu_clean = cpu.replace("Apple ", "")
+        
+        parts = [model, cpu_clean]
+        if screen:
+            parts.append(screen)
+        if ram_disk_str:
+            parts.append(ram_disk_str)
+            
+        return " ".join(parts)
+        
+    elif system == "Windows":
+        model = "Windows Laptop"
+        cpu = ""
+        gpu = ""
+        
+        # Get Model
+        try:
+            res = subprocess.run(["wmic", "computersystem", "get", "manufacturer,model"], capture_output=True)
+            if res.returncode == 0:
+                try:
+                    out = res.stdout.decode('utf-16').strip()
+                except Exception:
+                    out = res.stdout.decode('utf-8', errors='ignore').strip()
+                lines = [l.strip() for l in out.splitlines() if l.strip()]
+                if len(lines) > 1:
+                    val = lines[1]
+                    val = re.sub(r'\s+', ' ', val)
+                    val = val.replace("ASUSTeK COMPUTER INC.", "ASUS")
+                    model = val
+        except Exception:
+            pass
+            
+        # Get CPU
+        try:
+            res = subprocess.run(["wmic", "cpu", "get", "name"], capture_output=True)
+            if res.returncode == 0:
+                try:
+                    out = res.stdout.decode('utf-16').strip()
+                except Exception:
+                    out = res.stdout.decode('utf-8', errors='ignore').strip()
+                lines = [l.strip() for l in out.splitlines() if l.strip()]
+                if len(lines) > 1:
+                    cpu = lines[1]
+                    cpu = cpu.replace("Intel(R) Core(TM) ", "")
+                    cpu = cpu.replace("AMD Ryzen ", "")
+                    cpu = cpu.replace(" CPU", "")
+                    cpu = re.sub(r'\s+@.*', '', cpu)
+        except Exception:
+            pass
+            
+        # Get GPU
+        try:
+            res = subprocess.run(["wmic", "path", "win32_VideoController", "get", "name"], capture_output=True)
+            if res.returncode == 0:
+                try:
+                    out = res.stdout.decode('utf-16').strip()
+                except Exception:
+                    out = res.stdout.decode('utf-8', errors='ignore').strip()
+                lines = [l.strip() for l in out.splitlines() if l.strip()]
+                if len(lines) > 1:
+                    gpu = lines[1]
+                    gpu = gpu.replace("NVIDIA GeForce ", "")
+                    gpu = gpu.replace(" Laptop GPU", "")
+        except Exception:
+            pass
+            
+        parts = [model]
+        if cpu:
+            parts.append(cpu)
+        if gpu and not any(igpu in gpu.lower() for igpu in ["intel", "amd", "radeon", "graphics"]):
+            parts.append(gpu)
+        if ram_disk_str:
+            parts.append(ram_disk_str)
+            
+        return " ".join(parts)
+        
+    return "Generic Laptop"
+
 def generate_report(cycles, design_capacity=None, full_charge_capacity=None, recent_usage=None, battery_unit="mWh"):
+    device_specs = get_device_specs()
     report_lines = []
     report_lines.append("=========================================================")
     report_lines.append("                    LAPTOP BATTERY TEST REPORT")
     report_lines.append("=========================================================")
-    report_lines.append(f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report_lines.append(f"Device Name  : {device_specs}")
+    report_lines.append(f"Generated at : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report_lines.append("")
     
     total_completed = 0
@@ -313,7 +479,21 @@ def generate_report(cycles, design_capacity=None, full_charge_capacity=None, rec
                 pass
             
     report_lines.append("=========================================================")
+    report_lines.append("Google Sheets Copy-Paste Row (tab-separated):")
     
+    # Header row
+    header_row = ["Device Specs"]
+    data_row = [device_specs]
+    for idx, c in enumerate(cycles, 1):
+        header_row.extend([f"Cycle #{idx} Dur", f"Cycle #{idx} Mins"])
+        dur_secs = c['duration_secs']
+        dur_str = convert_seconds_to_hhmmss(dur_secs)
+        dur_mins = f"{dur_secs / 60.0:.1f}"
+        data_row.extend([dur_str, dur_mins])
+        
+    report_lines.append("\t".join(header_row))
+    report_lines.append("\t".join(data_row))
+    report_lines.append("=========================================================")
     return "\n".join(report_lines)
 
 def main():
