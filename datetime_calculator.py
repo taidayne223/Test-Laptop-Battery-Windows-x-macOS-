@@ -394,7 +394,7 @@ def get_device_specs():
         
     return "Generic Laptop"
 
-def generate_report(cycles, design_capacity=None, full_charge_capacity=None, recent_usage=None, battery_unit="mWh"):
+def generate_report(cycles, design_capacity=None, full_charge_capacity=None, recent_usage=None, battery_unit="mWh", voltage_mv=None):
     device_specs = get_device_specs()
     report_lines = []
     report_lines.append("=========================================================")
@@ -416,10 +416,19 @@ def generate_report(cycles, design_capacity=None, full_charge_capacity=None, rec
         start_cap_printed = False
         if c.get('start_capacity') is not None:
             try:
-                cap_val = f"{c['start_capacity']:,}"
+                cap_int = int(c['start_capacity'])
+                if battery_unit == "mAh" and voltage_mv:
+                    cap_wh = (cap_int * voltage_mv) / 1000000.0
+                    cap_str = f" ({cap_wh:.1f} Wh)"
+                elif battery_unit == "mWh":
+                    cap_wh = cap_int / 1000.0
+                    cap_str = f" ({cap_wh:.1f} Wh)"
+                else:
+                    cap_str = ""
+                cap_val = f"{cap_int:,} {battery_unit}{cap_str}"
             except ValueError:
-                cap_val = c['start_capacity']
-            report_lines.append(f"  - Start capacity       : {cap_val} {battery_unit} ({c['start_level']}%)")
+                cap_val = f"{c['start_capacity']} {battery_unit}"
+            report_lines.append(f"  - Start capacity       : {cap_val} ({c['start_level']}%)")
             start_cap_printed = True
             
         # Fallback to matching powercfg report (Windows) if not printed yet
@@ -427,10 +436,12 @@ def generate_report(cycles, design_capacity=None, full_charge_capacity=None, rec
             closest = find_closest_usage(c['start_time'], recent_usage)
             if closest and closest['capacity_mwh'] is not None:
                 try:
-                    cap_val = f"{closest['capacity_mwh']:,}"
+                    cap_int = int(closest['capacity_mwh'])
+                    cap_wh = cap_int / 1000.0
+                    cap_val = f"{cap_int:,} mWh ({cap_wh:.1f} Wh)"
                 except ValueError:
-                    cap_val = closest['capacity_mwh']
-                report_lines.append(f"  - Start capacity       : {cap_val} mWh ({closest['percent']})")
+                    cap_val = f"{closest['capacity_mwh']} mWh"
+                report_lines.append(f"  - Start capacity       : {cap_val} ({closest['percent']})")
         
         dur_secs = c['duration_secs']
         dur_str = convert_seconds_to_hhmmss(dur_secs)
@@ -454,16 +465,35 @@ def generate_report(cycles, design_capacity=None, full_charge_capacity=None, rec
         report_lines.append("System Battery Capacity:")
         if design_capacity:
             try:
-                dc_val = f"{int(design_capacity):,}"
+                dc_int = int(design_capacity)
+                if battery_unit == "mAh" and voltage_mv:
+                    dc_wh = (dc_int * voltage_mv) / 1000000.0
+                    dc_str = f" ({dc_wh:.1f} Wh)"
+                elif battery_unit == "mWh":
+                    dc_wh = dc_int / 1000.0
+                    dc_str = f" ({dc_wh:.1f} Wh)"
+                else:
+                    dc_str = ""
+                dc_val = f"{dc_int:,} {battery_unit}{dc_str}"
             except ValueError:
-                dc_val = design_capacity
-            report_lines.append(f"  - Design capacity      : {dc_val} {battery_unit}")
+                dc_val = f"{design_capacity} {battery_unit}"
+            report_lines.append(f"  - Design capacity      : {dc_val}")
+            
         if full_charge_capacity:
             try:
-                fcc_val = f"{int(full_charge_capacity):,}"
+                fcc_int = int(full_charge_capacity)
+                if battery_unit == "mAh" and voltage_mv:
+                    fcc_wh = (fcc_int * voltage_mv) / 1000000.0
+                    fcc_str = f" ({fcc_wh:.1f} Wh)"
+                elif battery_unit == "mWh":
+                    fcc_wh = fcc_int / 1000.0
+                    fcc_str = f" ({fcc_wh:.1f} Wh)"
+                else:
+                    fcc_str = ""
+                fcc_val = f"{fcc_int:,} {battery_unit}{fcc_str}"
             except ValueError:
-                fcc_val = full_charge_capacity
-            report_lines.append(f"  - Full charge capacity : {fcc_val} {battery_unit}")
+                fcc_val = f"{full_charge_capacity} {battery_unit}"
+            report_lines.append(f"  - Full charge capacity : {fcc_val}")
             
         # Calculate battery health and wear (chai pin)
         if design_capacity and full_charge_capacity:
@@ -494,6 +524,7 @@ def generate_report(cycles, design_capacity=None, full_charge_capacity=None, rec
     report_lines.append("\t".join(header_row))
     report_lines.append("\t".join(data_row))
     report_lines.append("=========================================================")
+    
     return "\n".join(report_lines)
 
 def main():
@@ -535,6 +566,7 @@ def main():
         full_charge_capacity = None
         recent_usage = []
         battery_unit = "mWh"
+        voltage_mv = None
         
         if platform.system() == "Windows":
             battery_unit = "mWh"
@@ -557,11 +589,14 @@ def main():
                     m_design = re.search(r'"DesignCapacity"\s*=\s*(\d+)', res.stdout)
                     if m_design:
                         design_capacity = m_design.group(1)
-                    m_max = re.search(r'"MaxCapacity"\s*=\s*(\d+)', res.stdout)
+                    m_max = re.search(r'"AppleRawMaxCapacity"\s*=\s*(\d+)', res.stdout)
                     if not m_max:
-                        m_max = re.search(r'"AppleRawMaxCapacity"\s*=\s*(\d+)', res.stdout)
+                        m_max = re.search(r'"MaxCapacity"\s*=\s*(\d+)', res.stdout)
                     if m_max:
                         full_charge_capacity = m_max.group(1)
+                    m_volt = re.search(r'"Voltage"\s*=\s*(\d+)', res.stdout)
+                    if m_volt:
+                        voltage_mv = int(m_volt.group(1))
             except Exception as e:
                 print(f"Warning: Failed to retrieve battery info on macOS: {e}")
             
@@ -572,7 +607,7 @@ def main():
             sys.exit(1)
             
         cycles = detect_cycles(events)
-        report = generate_report(cycles, design_capacity, full_charge_capacity, recent_usage, battery_unit=battery_unit)
+        report = generate_report(cycles, design_capacity, full_charge_capacity, recent_usage, battery_unit=battery_unit, voltage_mv=voltage_mv)
         
         # Print report
         print(report)
