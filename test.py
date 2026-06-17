@@ -11,7 +11,7 @@ from utils.battery_utils import get_battery_level
 from test_cases.office_test import run_office_test
 from test_cases.browser_test import run_browser_test
 from test_cases.youtube_test import run_youtube_test
-from test_cases.facebook_test import run_facebook_test
+
 
 # Disable fail safe mechanism of Pyautogui
 pyautogui.FAILSAFE = False
@@ -45,7 +45,7 @@ def start_test(no_youtube='0'):
 
         if str(no_youtube) != '1':
             run_youtube_test()
-            run_facebook_test()
+
 
 def calculate_elapsed_time(start_time):
     elapsed_time = datetime.now() - start_time

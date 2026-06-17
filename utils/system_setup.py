@@ -318,22 +318,8 @@ def optimize_system():
         except Exception as e:
             print(f"[WARNING] Could not disable ambient light adaptive brightness: {e}")
 
-        # 9. Set monitor refresh rate to 60Hz
-        set_windows_refresh_rate(60)
-
-        # 10. Check and enable Bluetooth
+        # 9. Check and enable Bluetooth
         enable_windows_bluetooth()
-
-        # 11. Switch Windows to Dark Mode (optimizes battery life for OLED screens)
-        try:
-            import winreg
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", 0, winreg.KEY_SET_VALUE)
-            winreg.SetValueEx(key, "AppsUseLightTheme", 0, winreg.REG_DWORD, 0)
-            winreg.SetValueEx(key, "SystemUsesLightTheme", 0, winreg.REG_DWORD, 0)
-            winreg.CloseKey(key)
-            print("[OK] Enabled Windows Dark Mode")
-        except Exception as e:
-            print(f"[WARNING] Could not enable Windows Dark Mode: {e}")
 
     elif system == "Darwin": # macOS
         # 1. Power Mode
@@ -364,13 +350,7 @@ def optimize_system():
         except Exception as e:
             print(f"[WARNING] Could not set volume: {e}")
 
-        # 5. Switch macOS to Dark Mode (optimizes battery life for OLED screens)
-        try:
-            script = 'tell application "System Events" to tell appearance preferences to set dark mode to true'
-            subprocess.run(["osascript", "-e", script], capture_output=True, check=True)
-            print("[OK] Enabled macOS Dark Mode")
-        except Exception as e:
-            print(f"[WARNING] Could not enable macOS Dark Mode: {e}")
+
 
         # 6. Switch input source to U.S. (com.apple.keylayout.US)
         switch_macos_input_to_us()
