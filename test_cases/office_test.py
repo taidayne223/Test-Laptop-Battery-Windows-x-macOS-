@@ -4,6 +4,7 @@ import platform
 from utils.battery_utils import get_battery_level
 from utils import start_file, close_window, clean_office
 from utils import custom_scroll
+from utils.config import get_config, platform_seconds
 import time
 
 text_to_write = """
@@ -15,6 +16,7 @@ text_to_write = """
 """
 
 def run_office_test(quick=False):
+    config = get_config()["office_test"]
     base_path = os.path.join('test_files', 'office')
 
     if quick:
@@ -39,25 +41,27 @@ def run_office_test(quick=False):
     screenWidth, screenHeight = pyautogui.size() # Get the size of the primary monitor
     print(f'Screen size: {screenWidth}, {screenHeight}')
 
+    app_load_wait = platform_seconds(config["app_load_wait_seconds"], platform_name)
+    scroll_times = config["scroll_times"]
+    scroll_pause = config["quick_scroll_pause_seconds"] if quick else config["scroll_pause_seconds"]
+    close_wait = config["close_wait_seconds"]
+
     for path in file_paths:
 
         start_file(path)
         # Sleep to allow the application to fully launch and render
-        if platform_name == 'Darwin':
-            time.sleep(5)
-        else:
-            time.sleep(2)
+        time.sleep(app_load_wait)
 
         pyautogui.moveTo(screenWidth/2, screenHeight/2, duration=1)
         pyautogui.click(clicks=1)
 
-        custom_scroll(times=10, direction="down")
-        time.sleep(2 if quick else 7)
-        custom_scroll(times=10, direction="up")
-        time.sleep(2 if quick else 7)
-        custom_scroll(times=10, direction="down")
+        custom_scroll(times=scroll_times, direction="down")
+        time.sleep(scroll_pause)
+        custom_scroll(times=scroll_times, direction="up")
+        time.sleep(scroll_pause)
+        custom_scroll(times=scroll_times, direction="down")
 
         close_window()
-        time.sleep(1)
+        time.sleep(close_wait)
         clean_office()
-        time.sleep(1)
+        time.sleep(close_wait)

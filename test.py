@@ -8,6 +8,7 @@ import argparse
 from datetime import datetime
 
 from utils.battery_utils import get_battery_level
+from utils.config import get_config
 from test_cases.office_test import run_office_test
 from test_cases.browser_test import run_browser_test
 from test_cases.youtube_test import run_youtube_test
@@ -52,11 +53,13 @@ def calculate_elapsed_time(start_time):
     print(f'Elapsed time: {elapsed_time}')
 
 def information_process():
+    config = get_config()
+    battery_log_interval = config["reporting"]["battery_log_interval_seconds"]
     start_time = datetime.now()
     while True:
         get_battery_level()
         calculate_elapsed_time(start_time=start_time)
-        time.sleep(3)
+        time.sleep(battery_log_interval)
 
 if __name__ == "__main__":
     from utils.system_setup import optimize_system

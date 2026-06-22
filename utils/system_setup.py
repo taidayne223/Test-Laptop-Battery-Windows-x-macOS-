@@ -2,6 +2,10 @@ import os
 import platform
 import subprocess
 import psutil
+try:
+    from utils.config import clamp_percent, get_config, positive_int
+except ModuleNotFoundError:
+    from config import clamp_percent, get_config, positive_int
 
 # Helper to change screen refresh rate to 60Hz on Windows
 def set_windows_refresh_rate(refresh_rate=60):
@@ -216,8 +220,95 @@ def switch_macos_input_to_us():
         print(f"[WARNING] Could not switch macOS input source: {e}")
     return False
 
+def disable_macos_low_power_mode():
+    try:
+        result = subprocess.run(["pmset", "-a", "lowpowermode", "0"], capture_output=True, text=True)
+        if result.returncode == 0:
+            print("[OK] Disabled macOS Low Power Mode")
+            return True
+
+        message = result.stderr.strip() or result.stdout.strip() or "unknown error"
+        print(f"[WARNING] Could not disable macOS Low Power Mode: {message}")
+    except Exception as e:
+        print(f"[WARNING] Could not disable macOS Low Power Mode: {e}")
+    return False
+
+def configure_windows_sleep_timeouts():
+    timeout_settings = [
+        "monitor-timeout-dc",
+        "standby-timeout-dc",
+        "hibernate-timeout-dc",
+        "disk-timeout-dc",
+    ]
+
+    failed = []
+    for setting in timeout_settings:
+        try:
+            subprocess.run(["powercfg", "/change", setting, "0"], capture_output=True, check=True)
+        except Exception:
+            failed.append(setting)
+
+    if failed:
+        print(f"[WARNING] Could not configure these Windows timeout settings: {', '.join(failed)}")
+    else:
+        print("[OK] Turned off display, sleep, hibernate, and disk timeouts on battery")
+
+def wait_for_battery_ready(minimum_percent=99, require_unplugged=True):
+    try:
+        battery = psutil.sensors_battery()
+        if not battery:
+            print("[WARNING] Could not read battery state.")
+            return
+
+        percent = battery.percent
+        plugged = battery.power_plugged
+        status = "Charging/Plugged In" if plugged else "Discharging/On Battery"
+        print(f"[INFO] Current Battery: {percent}% ({status})")
+
+        if percent < minimum_percent:
+            print(f"\n[WARNING] Your battery is at {percent}%. For accurate and consistent test results:")
+            if plugged:
+                print(f"  --> Please keep the charger connected until it reaches at least {minimum_percent}%, then unplug to start testing.")
+            else:
+                print(f"  --> Please connect your charger, wait until it reaches at least {minimum_percent}%, then unplug to start testing.")
+            print("\n=================================================================")
+            try:
+                input("Press [Enter] to ignore this warning and continue anyway...")
+            except (KeyboardInterrupt, SystemExit):
+                import sys
+                print("\nTest cancelled by user.")
+                sys.exit(0)
+
+        while require_unplugged:
+            battery = psutil.sensors_battery()
+            if not battery or not battery.power_plugged:
+                break
+
+            print("\n[WARNING] Charger is still connected. Battery test results need the machine to run on battery power.")
+            try:
+                input("Unplug the charger, then press [Enter] to start the test...")
+            except (KeyboardInterrupt, SystemExit):
+                import sys
+                print("\nTest cancelled by user.")
+                sys.exit(0)
+
+        battery = psutil.sensors_battery()
+        if battery:
+            final_status = "Charging/Plugged In" if battery.power_plugged else "Discharging/On Battery"
+            print(f"[OK] Battery start condition checked: {battery.percent}% ({final_status})")
+    except Exception as e:
+         print(f"[WARNING] Could not check battery: {e}")
+
 def optimize_system():
     system = platform.system()
+    config = get_config()
+    system_config = config["system"]
+    brightness_percent = clamp_percent(system_config["brightness_percent"])
+    brightness_ratio = brightness_percent / 100
+    refresh_rate_hz = positive_int(system_config.get("refresh_rate_hz"), 60)
+    battery_saver_threshold = clamp_percent(system_config.get("battery_saver_threshold_percent", 30))
+    minimum_start_battery = clamp_percent(system_config.get("minimum_start_battery_percent", 99))
+    require_unplugged = bool(system_config.get("require_unplugged", True))
     print("=================================================================")
     print("   [1-Click Setup] Optimizing System Settings for Battery Test   ")
     print("=================================================================")
@@ -231,53 +322,51 @@ def optimize_system():
         except Exception as e:
             print(f"[WARNING] Could not set power mode to Balanced: {e}")
 
-        # 2. Set screen brightness to 75%
+        # 2. Standardize screen refresh rate
+        set_windows_refresh_rate(refresh_rate_hz)
+
+        # 3. Set screen brightness
         try:
             # First try using powercfg (most robust, works on all Windows systems including ARM64/Snapdragon)
             try:
-                subprocess.run(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", "SUB_VIDEO", "VIDEONORMALLEVEL", "75"], capture_output=True, check=True)
-                subprocess.run(["powercfg", "/setacvalueindex", "SCHEME_CURRENT", "SUB_VIDEO", "VIDEONORMALLEVEL", "75"], capture_output=True, check=True)
+                subprocess.run(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", "SUB_VIDEO", "VIDEONORMALLEVEL", str(brightness_percent)], capture_output=True, check=True)
+                subprocess.run(["powercfg", "/setacvalueindex", "SCHEME_CURRENT", "SUB_VIDEO", "VIDEONORMALLEVEL", str(brightness_percent)], capture_output=True, check=True)
                 subprocess.run(["powercfg", "/setactive", "SCHEME_CURRENT"], capture_output=True, check=True)
-                print("[OK] Set screen brightness to 75% (via powercfg)")
+                print(f"[OK] Set screen brightness to {brightness_percent}% (via powercfg)")
             except Exception as e_pcfg:
                 print(f"[WARNING] Could not set screen brightness via powercfg: {e_pcfg}")
 
             # Also try screen-brightness-control to force instant driver update if supported
             try:
                 import screen_brightness_control as sbc
-                sbc.set_brightness(75)
-                print("[OK] Enforced screen brightness to 75% (via screen-brightness-control)")
+                sbc.set_brightness(brightness_percent)
+                print(f"[OK] Enforced screen brightness to {brightness_percent}% (via screen-brightness-control)")
             except Exception:
                 try:
                     # Try modern CimInstance (Windows 11 / PowerShell Core)
-                    cmd = "Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods | Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{Timeout=1; Brightness=75}"
+                    cmd = f"Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods | Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{{Timeout=1; Brightness={brightness_percent}}}"
                     subprocess.run(["powershell", "-Command", cmd], capture_output=True, check=True)
-                    print("[OK] Enforced screen brightness to 75% (via CIM)")
+                    print(f"[OK] Enforced screen brightness to {brightness_percent}% (via CIM)")
                 except Exception:
                     # Fallback to WMI (legacy PowerShell)
-                    cmd = "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, 75)"
+                    cmd = f"(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, {brightness_percent})"
                     subprocess.run(["powershell", "-Command", cmd], capture_output=True, check=True)
-                    print("[OK] Enforced screen brightness to 75% (via WMI)")
+                    print(f"[OK] Enforced screen brightness to {brightness_percent}% (via WMI)")
         except Exception as e:
             print(f"[WARNING] Could not set screen brightness: {e}")
 
-        # 3. Turn off screen timeout (Never turn off screen on battery)
-        try:
-            subprocess.run(["powercfg", "/change", "monitor-timeout-dc", "0"], capture_output=True, check=True)
-            subprocess.run(["powercfg", "/change", "standby-timeout-dc", "0"], capture_output=True, check=True)
-            print("[OK] Turned off screen auto turn-off & standby sleep on battery")
-        except Exception as e:
-            print(f"[WARNING] Could not configure screen timeout: {e}")
+        # 4. Turn off screen, sleep, hibernate, and disk timeouts on battery
+        configure_windows_sleep_timeouts()
 
-        # 4. Set battery saver on at 30%
+        # 5. Set battery saver threshold
         try:
-            subprocess.run(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", "SUB_ENERGYSAVER", "ESBATTTHRESHOLD", "30"], capture_output=True, check=True)
+            subprocess.run(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", "SUB_ENERGYSAVER", "ESBATTTHRESHOLD", str(battery_saver_threshold)], capture_output=True, check=True)
             subprocess.run(["powercfg", "/setactive", "SCHEME_CURRENT"], capture_output=True, check=True)
-            print("[OK] Configured Battery/Energy Saver to turn on at 30%")
+            print(f"[OK] Configured Battery/Energy Saver to turn on at {battery_saver_threshold}%")
         except Exception as e:
             print(f"[WARNING] Could not configure Battery Saver threshold: {e}")
 
-        # 5. Turn "lower screen brightness on low battery" off (set to 100% of normal brightness)
+        # 6. Turn "lower screen brightness on low battery" off (set to 100% of normal brightness)
         try:
             subprocess.run(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", "SUB_ENERGYSAVER", "ESBRIGHTNESS", "100"], capture_output=True, check=True)
             subprocess.run(["powercfg", "/setactive", "SCHEME_CURRENT"], capture_output=True, check=True)
@@ -285,7 +374,7 @@ def optimize_system():
         except Exception as e:
             print(f"[WARNING] Could not configure Battery Saver brightness: {e}")
 
-        # 6. Turn volume to 0%
+        # 7. Turn volume to 0%
         try:
             cmd = "$w = New-Object -ComObject Wscript.Shell; for($i = 0; $i -lt 50; $i++) { $w.SendKeys([char]174) }"
             subprocess.run(["powershell", "-Command", cmd], capture_output=True, check=True)
@@ -293,7 +382,7 @@ def optimize_system():
         except Exception as e:
             print(f"[WARNING] Could not set volume: {e}")
 
-        # 7. Disable 'Change brightness based on content' (CABC) in registry
+        # 8. Disable 'Change brightness based on content' (CABC) in registry
         try:
             import winreg
             key_path = r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers"
@@ -308,7 +397,7 @@ def optimize_system():
         except Exception as e:
             print(f"[WARNING] Could not disable 'Change brightness based on content' (CABC): {e}")
 
-        # 8. Disable ambient light adaptive brightness
+        # 9. Disable ambient light adaptive brightness
         try:
             # Subgroup: 7516b95f-f776-4464-8c53-06167f40cc99 (Display)
             # Setting: fbd9aa66-9553-4097-ba44-ed6e9d65eab8 (Enable adaptive brightness)
@@ -318,32 +407,36 @@ def optimize_system():
         except Exception as e:
             print(f"[WARNING] Could not disable ambient light adaptive brightness: {e}")
 
-        # 9. Check and enable Bluetooth
+        # 10. Check and enable Bluetooth
         enable_windows_bluetooth()
 
     elif system == "Darwin": # macOS
         # 1. Power Mode
         print("[OK] Power Mode check: High Performance Mode is disabled by default")
 
-        # 2. Set screen brightness to 75%
+        # 2. Disable Low Power Mode where macOS allows it
+        if system_config.get("macos_disable_low_power_mode", True):
+            disable_macos_low_power_mode()
+
+        # 3. Set screen brightness
         print("[INFO] Configuring screen brightness...")
-        brightness_set = set_macos_brightness(0.75)
+        brightness_set = set_macos_brightness(brightness_ratio)
         if brightness_set:
-            print("[OK] Set screen brightness to 75% (via DisplayServices)")
+            print(f"[OK] Set screen brightness to {brightness_percent}% (via DisplayServices)")
         else:
             try:
-                # 16 taps of key code 144 (brightness down) to set to 0, then 12 taps of 145 (brightness up) to set to 75%
+                brightness_up_taps = round(brightness_percent * 16 / 100)
                 script = 'tell application "System Events" to repeat 16 times\nkey code 144\ndelay 0.01\nend repeat\n' \
-                         'tell application "System Events" to repeat 12 times\nkey code 145\ndelay 0.01\nend repeat'
+                         f'tell application "System Events" to repeat {brightness_up_taps} times\nkey code 145\ndelay 0.01\nend repeat'
                 subprocess.run(["osascript", "-e", script], capture_output=True, check=True)
-                print("[OK] Set screen brightness to 75% (via AppleScript fallback)")
+                print(f"[OK] Set screen brightness to {brightness_percent}% (via AppleScript fallback)")
             except Exception:
-                print("[WARNING] Could not set screen brightness automatically. Please set it manually to 75%.")
+                print(f"[WARNING] Could not set screen brightness automatically. Please set it manually to {brightness_percent}%.")
 
-        # 3. Turn off auto turn off screen on battery power
+        # 4. Turn off auto turn off screen on battery power
         print("[OK] Sleep and display sleep prevention active via caffeinate wrapper")
 
-        # 4. Turn volume to 0%
+        # 5. Turn volume to 0%
         try:
             subprocess.run(["osascript", "-e", "set volume output volume 0"], capture_output=True, check=True)
             print("[OK] Turned volume to 0%")
@@ -355,6 +448,8 @@ def optimize_system():
         # 6. Switch input source to U.S. (com.apple.keylayout.US)
         switch_macos_input_to_us()
 
+        print("[INFO] Please keep True Tone, Night Shift, and automatic brightness disabled for the most comparable macOS results.")
+
     # Check internet connection
     try:
         import socket
@@ -364,33 +459,8 @@ def optimize_system():
     except Exception:
         print("[WARNING] No internet connection detected. Please connect to Wi-Fi for browser/multimedia tests.")
 
-    # Check battery level
-    try:
-        battery = psutil.sensors_battery()
-        if battery:
-            percent = battery.percent
-            plugged = battery.power_plugged
-            status = "Charging/Plugged In" if plugged else "Discharging/On Battery"
-            print(f"[INFO] Current Battery: {percent}% ({status})")
-            if percent < 99:
-                print(f"\n[WARNING] Your battery is at {percent}%. For accurate and consistent test results:")
-                if plugged:
-                    print("  --> Please keep the charger connected until it reaches 100%, then unplug to start testing.")
-                else:
-                    print("  --> Please connect your charger, wait until it reaches 100%, then unplug to start testing.")
-                print("\n=================================================================")
-                try:
-                    input("Press [Enter] to ignore this warning and start the test anyway...")
-                except (KeyboardInterrupt, SystemExit):
-                    import sys
-                    print("\nTest cancelled by user.")
-                    sys.exit(0)
-            else:
-                print("[OK] Battery is fully charged (100% or near 100%)")
-        else:
-            print("[WARNING] Could not read battery state.")
-    except Exception as e:
-         print(f"[WARNING] Could not check battery: {e}")
+    # Check battery level and require battery-power start if configured
+    wait_for_battery_ready(minimum_start_battery, require_unplugged)
 
     print("=================================================================\n")
 

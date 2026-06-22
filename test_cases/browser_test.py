@@ -1,61 +1,43 @@
 import pyautogui
 import time
-import webbrowser
 import os
 import platform
 from utils.battery_utils import get_battery_level
 from utils import custom_scroll, clean_browser, open_in_browser
+from utils.config import get_config, platform_seconds
 
 def run_browser_test():
 
     os_name = os.name
     platform_name = platform.system()
+    config = get_config()["browser_test"]
 
     print(f'Running Browser Test on {os_name}, {platform_name}')
     get_battery_level()
     clean_browser()
 
-    is_windows = True
-    is_macos = False
-
-    if platform_name == 'Darwin':
-        is_windows = False
-        is_macos = True
-
-    control_key_str = 'ctrl'
-
-    if is_macos:
-        control_key_str = 'command'
-
     screenWidth, screenHeight = pyautogui.size() # Get the size of the primary monitor
     print(f'Screen size: {screenWidth}, {screenHeight}')
 
-    # Browsing test
-    urls = [
-        'https://www.engadget.com/the-7-best-white-elephant-gifts-that-are-worth-stealing-150516076.html',
-        'https://www.engadget.com/transportation/evs/tesla-is-recalling-almost-700000-vehicles-over-a-tire-pressure-monitor-issue-223639361.html',
-        'https://www.engadget.com/entertainment/tv-movies/james-bond-the-movie-franchise-not-the-spy-may-be-in-deep-jeopardy-211608094.html',
-        'https://www.engadget.com/cybersecurity/the-us-consumer-financial-protection-bureau-sues-zelle-and-four-of-its-partner-banks-175714692.html',
-        'https://www.engadget.com/apps/flipboard-just-launched-surf-which-is-sort-of-like-an-rss-feed-for-the-open-social-web-184015833.html',
-    ]
+    urls = config["urls"]
+    page_load_wait = platform_seconds(config["page_load_wait_seconds"], platform_name)
+    scroll_times = config["scroll_times"]
+    scroll_pause = config["scroll_pause_seconds"]
 
     for url in urls:
         open_in_browser(url, use_extension=False)
 
         # Sleep to allow the browser/tab to fully load
-        if platform_name == 'Darwin':
-            time.sleep(4)
-        else:
-            time.sleep(2)
+        time.sleep(page_load_wait)
 
         pyautogui.moveTo(screenWidth/2, screenHeight/2, duration=1)
         pyautogui.click(clicks=1)
 
-        custom_scroll(times=10, direction="down")
-        time.sleep(7)
-        custom_scroll(times=10, direction="up")
-        time.sleep(7)
-        custom_scroll(times=10, direction="down")
+        custom_scroll(times=scroll_times, direction="down")
+        time.sleep(scroll_pause)
+        custom_scroll(times=scroll_times, direction="up")
+        time.sleep(scroll_pause)
+        custom_scroll(times=scroll_times, direction="down")
 
     # Close the browser:
     clean_browser()

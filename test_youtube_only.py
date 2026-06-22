@@ -2,8 +2,12 @@ import time
 import sys
 from test_cases.youtube_test import run_youtube_test
 from utils.system_setup import optimize_system
+from utils.config import get_config
 
 if __name__ == "__main__":
+    config = get_config()
+    restart_wait = config["cycle"]["youtube_only_restart_wait_seconds"]
+
     print("====================================================")
     print("   YouTube Keep-Alive Battery Test (YouTube Only)   ")
     print("====================================================")
@@ -17,8 +21,8 @@ if __name__ == "__main__":
         while True:
             print("\n--- Starting YouTube playback cycle ---")
             run_youtube_test()
-            print("\nCycle completed. Restarting YouTube test in 5 seconds...")
-            time.sleep(5)
+            print(f"\nCycle completed. Restarting YouTube test in {restart_wait} seconds...")
+            time.sleep(restart_wait)
     except KeyboardInterrupt:
         print("\nTest stopped by user.")
         sys.exit(0)

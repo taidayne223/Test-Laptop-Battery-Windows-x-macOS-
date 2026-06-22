@@ -158,6 +158,14 @@ def find_chrome_path():
             
     return None
 
+def chrome_launch_args(chrome_path, url):
+    return [
+        chrome_path,
+        "--disable-session-crashed-bubble",
+        "--hide-crash-restore-bubble",
+        url
+    ]
+
 def find_edge_path():
     system = platform.system()
     if system == "Windows":
@@ -239,8 +247,29 @@ def find_default_browser_mac():
 def open_in_browser(url, use_extension=False):
     import webbrowser
     system = platform.system()
+    chrome_path = find_chrome_path()
+
+    if chrome_path:
+        args = chrome_launch_args(chrome_path, url)
+        print(f"Launching Google Chrome with flags: {' '.join(args)}")
+        subprocess.Popen(args)
+        return
+
+    print("[WARNING] Google Chrome was not found. Falling back to another browser.")
     
     if system == "Windows":
+        edge_path = find_edge_path()
+        if edge_path:
+            args = [
+                edge_path,
+                "--disable-session-crashed-bubble",
+                "--hide-crash-restore-bubble",
+                url
+            ]
+            print(f"Launching Microsoft Edge with flags: {' '.join(args)}")
+            subprocess.Popen(args)
+            return
+
         default_path = find_default_browser_path_windows()
         if default_path:
             name = os.path.basename(default_path).lower()
@@ -260,8 +289,20 @@ def open_in_browser(url, use_extension=False):
                 return
                 
     elif system == "Darwin":
+        edge_app = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        if os.path.exists(edge_app):
+            args = [
+                edge_app,
+                "--disable-session-crashed-bubble",
+                "--hide-crash-restore-bubble",
+                url
+            ]
+            print(f"Launching Microsoft Edge with flags: {' '.join(args)}")
+            subprocess.Popen(args)
+            return
+
         default_app = find_default_browser_mac()
-        if default_app in ["Google Chrome", "Microsoft Edge"]:
+        if default_app in ["Microsoft Edge"]:
             args = [
                 "open",
                 "-a",

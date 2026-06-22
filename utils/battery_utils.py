@@ -1,5 +1,4 @@
 import psutil
-import time
 import logging
 import platform
 import subprocess
@@ -15,6 +14,12 @@ def get_battery_level():
     )
 
     battery = psutil.sensors_battery()
+    if battery is None:
+        log_string = 'Battery level: unavailable'
+        print(log_string)
+        logging.info(log_string)
+        return
+
     percent = str(battery.percent)
     
     capacity_str = ""
