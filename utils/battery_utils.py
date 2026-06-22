@@ -4,15 +4,18 @@ import platform
 import subprocess
 import re
 
+# Configure logging once at import time. basicConfig is a no-op if the root
+# logger is already configured (e.g. by test.py), so this only acts as a
+# fallback when get_battery_level is used standalone.
+logging.basicConfig(
+    filename='logfilename.log',
+    encoding='utf-8',
+    level=logging.INFO,
+    format='%(asctime)s | %(message)s'
+)
+
 
 def get_battery_level():
-    logging.basicConfig(
-        filename=f'logfilename.log',
-        encoding='utf-8',
-        level=logging.INFO,
-        format='%(asctime)s | %(message)s'
-    )
-
     battery = psutil.sensors_battery()
     if battery is None:
         log_string = 'Battery level: unavailable'

@@ -46,7 +46,9 @@
     "focus_wait_seconds": 1,
     "reload_wait_seconds": 5,
     "after_escape_wait_seconds": 0.5,
-    "theater_mode_enabled": true
+    "theater_mode_enabled": true,
+    "reset_to_start_enabled": true,
+    "reseek_interval_seconds": 60
   },
   "reporting": {
     "battery_log_interval_seconds": 3

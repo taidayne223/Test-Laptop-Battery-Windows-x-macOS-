@@ -163,4 +163,14 @@ cython_debug/
 
 battery_test_env
 
-~$rd_test_2.docx
+# Office temporary lock files
+~$*
+
+# Test run outputs (generated locally, not part of the project)
+logfilename.log
+battery_report.txt
+battery-report.html
+
+# macOS / OS junk
+.DS_Store
+Thumbs.db

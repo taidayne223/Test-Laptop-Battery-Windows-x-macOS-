@@ -230,6 +230,52 @@ def detect_cycles(events):
             
     return cycles
 
+def _powershell_first_line(cmd):
+    """Run a PowerShell command and return the first non-empty output line.
+
+    Used to query system info via Get-CimInstance, which is the supported
+    replacement for the deprecated `wmic` command (removed on newer Windows 11).
+    """
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", cmd],
+            capture_output=True, text=True
+        )
+        if res.returncode == 0 and res.stdout:
+            for line in res.stdout.splitlines():
+                line = line.strip()
+                if line:
+                    return line
+    except Exception:
+        pass
+    return ""
+
+
+def _wmic_first_value(args):
+    """Legacy fallback: run `wmic <args>` and return the first data row."""
+    try:
+        res = subprocess.run(["wmic"] + args, capture_output=True)
+        if res.returncode == 0:
+            try:
+                out = res.stdout.decode('utf-16').strip()
+            except Exception:
+                out = res.stdout.decode('utf-8', errors='ignore').strip()
+            lines = [l.strip() for l in out.splitlines() if l.strip()]
+            if len(lines) > 1:
+                return lines[1]
+    except Exception:
+        pass
+    return ""
+
+
+def query_windows_info(cim_cmd, wmic_args):
+    """Prefer CIM (future-proof); fall back to wmic on older systems."""
+    value = _powershell_first_line(cim_cmd)
+    if value:
+        return value
+    return _wmic_first_value(wmic_args)
+
+
 def get_device_specs():
     import os
     import platform
@@ -238,8 +284,8 @@ def get_device_specs():
     import shutil
 
     system = platform.system()
-    
-    # Get total RAM in GB using sysctl or wmic
+
+    # Get total RAM in GB using sysctl (macOS) or CIM/wmic (Windows)
     ram_gb = 0
     if system == "Darwin":
         try:
@@ -250,15 +296,12 @@ def get_device_specs():
             pass
     elif system == "Windows":
         try:
-            res = subprocess.run(["wmic", "computersystem", "get", "totalphysicalmemory"], capture_output=True)
-            if res.returncode == 0:
-                try:
-                    out = res.stdout.decode('utf-16').strip()
-                except Exception:
-                    out = res.stdout.decode('utf-8', errors='ignore').strip()
-                lines = [l.strip() for l in out.splitlines() if l.strip()]
-                if len(lines) > 1:
-                    ram_gb = round(int(lines[1]) / (1024**3))
+            ram_bytes = query_windows_info(
+                "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory",
+                ["computersystem", "get", "totalphysicalmemory"],
+            )
+            if ram_bytes:
+                ram_gb = round(int(re.sub(r'[^\d]', '', ram_bytes)) / (1024**3))
         except Exception:
             pass
             
@@ -333,52 +376,40 @@ def get_device_specs():
         
         # Get Model
         try:
-            res = subprocess.run(["wmic", "computersystem", "get", "manufacturer,model"], capture_output=True)
-            if res.returncode == 0:
-                try:
-                    out = res.stdout.decode('utf-16').strip()
-                except Exception:
-                    out = res.stdout.decode('utf-8', errors='ignore').strip()
-                lines = [l.strip() for l in out.splitlines() if l.strip()]
-                if len(lines) > 1:
-                    val = lines[1]
-                    val = re.sub(r'\s+', ' ', val)
-                    val = val.replace("ASUSTeK COMPUTER INC.", "ASUS")
-                    model = val
+            val = query_windows_info(
+                '$c = Get-CimInstance Win32_ComputerSystem; "$($c.Manufacturer) $($c.Model)"',
+                ["computersystem", "get", "manufacturer,model"],
+            )
+            if val:
+                val = re.sub(r'\s+', ' ', val).strip()
+                val = val.replace("ASUSTeK COMPUTER INC.", "ASUS")
+                model = val
         except Exception:
             pass
-            
+
         # Get CPU
         try:
-            res = subprocess.run(["wmic", "cpu", "get", "name"], capture_output=True)
-            if res.returncode == 0:
-                try:
-                    out = res.stdout.decode('utf-16').strip()
-                except Exception:
-                    out = res.stdout.decode('utf-8', errors='ignore').strip()
-                lines = [l.strip() for l in out.splitlines() if l.strip()]
-                if len(lines) > 1:
-                    cpu = lines[1]
-                    cpu = cpu.replace("Intel(R) Core(TM) ", "")
-                    cpu = cpu.replace("AMD Ryzen ", "")
-                    cpu = cpu.replace(" CPU", "")
-                    cpu = re.sub(r'\s+@.*', '', cpu)
+            cpu_raw = query_windows_info(
+                "(Get-CimInstance Win32_Processor).Name",
+                ["cpu", "get", "name"],
+            )
+            if cpu_raw:
+                cpu = cpu_raw.replace("Intel(R) Core(TM) ", "")
+                cpu = cpu.replace("AMD Ryzen ", "")
+                cpu = cpu.replace(" CPU", "")
+                cpu = re.sub(r'\s+@.*', '', cpu).strip()
         except Exception:
             pass
-            
+
         # Get GPU
         try:
-            res = subprocess.run(["wmic", "path", "win32_VideoController", "get", "name"], capture_output=True)
-            if res.returncode == 0:
-                try:
-                    out = res.stdout.decode('utf-16').strip()
-                except Exception:
-                    out = res.stdout.decode('utf-8', errors='ignore').strip()
-                lines = [l.strip() for l in out.splitlines() if l.strip()]
-                if len(lines) > 1:
-                    gpu = lines[1]
-                    gpu = gpu.replace("NVIDIA GeForce ", "")
-                    gpu = gpu.replace(" Laptop GPU", "")
+            gpu_raw = query_windows_info(
+                "(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name",
+                ["path", "win32_VideoController", "get", "name"],
+            )
+            if gpu_raw:
+                gpu = gpu_raw.replace("NVIDIA GeForce ", "")
+                gpu = gpu.replace(" Laptop GPU", "").strip()
         except Exception:
             pass
             

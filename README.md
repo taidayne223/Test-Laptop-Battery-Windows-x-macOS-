@@ -1,86 +1,119 @@
-# Laptop Battery Test
+# 🔋 Công Cụ Test Pin Laptop (Windows & macOS)
 
-Automated tool to simulate real-world office tasks (web browsing, document scrolling, and YouTube playback) to measure actual laptop battery life.
+Công cụ tự động **giả lập các tác vụ dùng máy hằng ngày** — lướt web, đọc tài liệu Word/Excel và xem YouTube — để đo **thời lượng pin thực tế** của laptop. Máy cứ tự chạy cho đến khi hết pin và tắt, sau đó bạn mở file phân tích để xem kết quả.
 
-* **Original Creator:** Duy Luan De Thuong
-* **Developer:** Tai Xai Tech
+Mục tiêu: cho ra con số pin **giống nhau, công bằng** giữa các máy và giữa Windows với macOS, để so sánh chính xác.
 
----
-
-## 💻 Requirements
-* **OS**: Windows 11 (x86/x64/ARM64) or macOS 12+ (Apple Silicon)
-* **Software**: 
-  * [Python 3](https://www.python.org/downloads/)
-  * Google Chrome (used by default for browser and YouTube tests)
-  * Microsoft Office (Word, Excel)
+* **Người sáng lập ý tưởng:** Duy Luân Dể Thương
+* **Người phát triển:** Tài Xài Tech
 
 ---
 
-## ⚡ Simulated Tasks (Infinite Loop)
-1. **Web Browsing**: Opens and scrolls through 5 websites.
-2. **Office Simulation**: Opens and scrolls through 3 Word documents and 1 Excel sheet.
-3. **YouTube Watching**: Plays configured videos in Theater mode.
+## 💻 Cần chuẩn bị gì?
 
-Benchmark URLs, durations, and brightness are configured in **`benchmark_config.json`**.
+* **Hệ điều hành:** Windows 11 (x86/x64/ARM64) hoặc macOS 12 trở lên (Apple Silicon)
+* **Phần mềm:**
+  * [Python 3](https://www.python.org/downloads/) — nền tảng để chạy công cụ
+  * Google Chrome — trình duyệt dùng để test web và YouTube
+  * Microsoft Office (Word, Excel) — để test tác vụ văn phòng
 
----
-
-## 🛠️ Automated 1-Click Setup
-When launched, the tool automatically optimizes system settings for consistency:
-* Sets screen brightness from **`system.brightness_percent`** and volume to **0%**.
-* Sets Windows refresh rate from **`system.refresh_rate_hz`** when supported.
-* Disables Windows display/sleep/hibernate/disk timeouts on battery during the test.
-* Switches macOS input source to **U.S. (English)** to prevent Telex/VNI hotkey issues.
-* Attempts to disable macOS Low Power Mode when supported.
-* Prevents the screen and system from going to sleep during the test.
-* Sets Windows power mode to **Balanced** and Battery Saver threshold from **`system.battery_saver_threshold_percent`**.
-* Verifies Wi-Fi connectivity, checks the configured minimum battery level, and can require unplugging before the test starts.
+> 💡 Lần đầu cài Python trên Windows, nhớ **tick vào ô "Add Python to PATH"** ở màn hình cài đặt.
 
 ---
 
-## 🚀 How to Run
+## 🚀 Cách chạy (rất đơn giản)
 
-### 🍏 macOS:
-1. Open Terminal and navigate to the project directory:
+### 🪟 Trên Windows
+Chỉ cần **bấm đúp vào file `Windows bat dau.bat`**.
+
+Công cụ sẽ tự làm hết phần còn lại: xin quyền Administrator, cài các thư viện cần thiết, tối ưu máy rồi bắt đầu test. Bạn không cần gõ lệnh gì cả.
+
+### 🍏 Trên macOS
+1. Mở **Terminal**, lần đầu tiên cấp quyền chạy cho các file (chỉ làm **một lần duy nhất**):
    ```sh
-   cd /path/to/project
-   ```
-2. Grant execution permissions (only required **once**):
-   ```sh
+   cd đường/dẫn/tới/thư-mục-này
    chmod +x *.command
    ```
-3. Double-click **`Macos bat dau.command`** in Finder to run.
+2. Sau đó **bấm đúp vào `Macos bat dau.command`** trong Finder để chạy.
 
-### 🔌 Windows:
-* Double-click **`Windows bat dau.bat`** to automatically configure, install dependencies, and start the test.
-
-> [!TIP]
-> **Disable YouTube test**: To run only web and office tests, execute `python test.py 1` in your terminal.
-> 
-> **Windows ARM Note**: If dependency installation fails, download [Visual Studio](https://visualstudio.microsoft.com/downloads/) and install the **Desktop Development with C++** workload.
+> 🛑 Muốn **dừng test** bất cứ lúc nào: bấm `Ctrl + C` trong cửa sổ đang chạy.
 
 ---
 
-## ⚙️ Benchmark Config
-Edit **`benchmark_config.json`** to change the benchmark without touching code:
-* **`system.brightness_percent`**: screen brightness used during setup.
-* **`system.refresh_rate_hz`**: Windows display refresh-rate target when supported.
-* **`system.battery_saver_threshold_percent`**: Windows Battery/Energy Saver threshold.
-* **`system.minimum_start_battery_percent`**: battery level warning threshold before running.
-* **`system.require_unplugged`**: require the charger to be unplugged before the benchmark starts.
-* **`system.macos_disable_low_power_mode`**: attempt to disable macOS Low Power Mode.
-* **`browser_test.urls`**: websites opened during the browser test.
-* **`youtube_test.urls`**: YouTube videos used during the playback test.
-* **`youtube_test.total_seconds_per_video`**: target total time per YouTube video.
-* **`youtube_test.quick_seconds_per_video`**: short YouTube duration used by `test_quick_youtube_word.py`.
-* **`browser_test`**, **`office_test`**, **`reporting`**, and **`cycle`** wait values: timing knobs for page load, scrolling, logging, and cycle restart.
+## ⚙️ Công cụ làm gì khi chạy?
+
+### 1. Tự động tối ưu máy (1-Click Setup)
+Để kết quả công bằng, công cụ tự chỉnh máy về một trạng thái chuẩn:
+- Đặt **độ sáng màn hình** theo cấu hình và **âm lượng về 0%**.
+- Chỉnh **tần số quét** (refresh rate) về mức cấu hình trên Windows nếu hỗ trợ.
+- **Tắt tự động ngủ / tắt màn hình / ngủ đông** khi đang chạy bằng pin.
+- Tắt các tính năng tự đổi độ sáng (adaptive brightness, CABC) để độ sáng luôn cố định.
+- Trên macOS: chuyển bàn phím về **U.S. (English)** để tránh lỗi gõ tắt Telex/VNI, và thử tắt **Low Power Mode**.
+- Kiểm tra **kết nối Wi-Fi**, kiểm tra **mức pin tối thiểu**, và có thể yêu cầu **rút sạc** trước khi bắt đầu.
+
+### 2. Lặp lại liên tục 3 nhóm tác vụ (cho tới khi hết pin)
+1. **Lướt web** — mở và cuộn qua 5 trang web.
+2. **Văn phòng** — mở và cuộn 3 file Word + 1 file Excel.
+3. **Xem YouTube** — phát video ở chế độ rạp hát (Theater mode).
+
+Mọi đường link, thời lượng, độ sáng... đều chỉnh được trong file **`benchmark_config.json`** (xem mục bên dưới).
 
 ---
 
-## 📊 Result Analysis (Logs)
-Once the laptop shuts down due to battery depletion, plug in the charger, boot it back up, and analyze the logs:
+## 🎬 Chỉ muốn test YouTube hoặc bỏ qua YouTube?
 
-* **Windows**: Double-click **`Windows phan tich file.bat`**
-* **macOS**: Double-click **`Macos phan tich file.command`**
+* **Chỉ test YouTube:** bấm đúp `start_youtube_only.bat` (Windows), hoặc chạy `python test_youtube_only.py`.
+* **Bỏ qua YouTube** (chỉ web + văn phòng): chạy `python test.py 1` trong Terminal.
 
-This generates a detailed battery life report printed to the screen and saved to **`battery_report.txt`**.
+> 🧯 **Về lỗi YouTube hay bị "đơ":** YouTube có cơ chế tự phát video tiếp theo, đôi khi nhảy vào đoạn gần hết video rồi treo. Công cụ đã xử lý bằng cách **tự tua video về đầu** (nhấn phím `0`) lúc bắt đầu và lặp lại định kỳ, nên video không bao giờ chạy tới đoạn cuối. Bạn không cần làm gì thêm.
+
+---
+
+## 📊 Xem kết quả sau khi máy hết pin
+
+Khi laptop tự tắt vì cạn pin: **cắm sạc, bật máy lên lại**, rồi mở file phân tích:
+
+* **Windows:** bấm đúp `Windows phan tich file.bat`
+* **macOS:** bấm đúp `Macos phan tich file.command`
+
+Công cụ sẽ in ra **báo cáo thời lượng pin chi tiết** (mỗi lần xả pin kéo dài bao lâu, tụt bao nhiêu %, tốc độ xả mỗi giờ, độ chai pin...) và lưu vào file **`battery_report.txt`**. Cuối báo cáo còn có sẵn một dòng để **copy-paste thẳng vào Google Sheets**.
+
+---
+
+## 🛠️ Tùy chỉnh bài test (`benchmark_config.json`)
+
+Bạn có thể đổi cách test mà **không cần đụng vào code** — chỉ sửa file `benchmark_config.json`. Vài thông số hay dùng:
+
+| Thông số | Ý nghĩa |
+|---|---|
+| `system.brightness_percent` | Độ sáng màn hình khi test (%) |
+| `system.refresh_rate_hz` | Tần số quét màn hình mục tiêu (Windows) |
+| `system.minimum_start_battery_percent` | Mức pin tối thiểu nên có trước khi test |
+| `system.require_unplugged` | Bắt buộc rút sạc mới cho chạy |
+| `browser_test.urls` | Danh sách trang web để test lướt web |
+| `youtube_test.urls` | Danh sách video YouTube để test |
+| `youtube_test.total_seconds_per_video` | Thời gian xem mỗi video (giây) |
+| `youtube_test.reseek_interval_seconds` | Cứ sau bao nhiêu giây thì tua video về đầu (chống lỗi treo). Để `0` nếu muốn tắt |
+| `youtube_test.theater_mode_enabled` | Bật chế độ rạp hát của YouTube |
+
+> ⚠️ File này là dạng JSON: nhớ giữ đúng dấu phẩy, ngoặc và dấu nháy. Nếu lỡ sửa sai, công cụ vẫn chạy được bằng cấu hình mặc định và sẽ báo cảnh báo.
+
+---
+
+## ❓ Câu hỏi thường gặp
+
+**Đang test có dùng máy được không?**
+Không nên. Công cụ tự điều khiển chuột và bàn phím, bạn cứ để máy chạy yên một mình cho tới khi hết pin.
+
+**Mất bao lâu?**
+Tùy pin từng máy — thường vài tiếng, chạy cho đến khi máy tự tắt.
+
+**Có hại pin không?**
+Không. Đây chỉ là một chu kỳ xả pin bình thường như khi bạn dùng máy hằng ngày.
+
+**Windows ARM cài thư viện bị lỗi?**
+Tải [Visual Studio](https://visualstudio.microsoft.com/downloads/) và cài gói **Desktop Development with C++**, rồi chạy lại.
+
+---
+
+Chúc bạn test pin vui vẻ! Nếu thấy hữu ích, đừng quên ⭐ cho dự án nhé.

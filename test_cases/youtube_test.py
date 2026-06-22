@@ -57,6 +57,13 @@ def run_youtube_test(duration=None):
         pyautogui.press('esc')
         time.sleep(after_escape_wait)
 
+        # Re-focus the player after the reload. YouTube hotkeys ('t', '0') only
+        # register when the player/page has keyboard focus, which can be lost
+        # during the hard refresh above.
+        pyautogui.moveTo(screenWidth / 2, screenHeight / 2, duration=0)
+        pyautogui.click()
+        time.sleep(0.3)
+
         if config["theater_mode_enabled"]:
             pyautogui.press(YOUTUBE_THEATER_MODE_KEY)
             print("Switched YouTube to Theater mode")
@@ -65,15 +72,33 @@ def run_youtube_test(duration=None):
         # YouTube's autoplay can land on a video that's almost finished and then
         # freeze (autoplay bug). Pressing '0' seeks to the very beginning so each
         # test starts from a clean, playing state.
-        if config.get("reset_to_start_enabled", True):
+        reset_enabled = config.get("reset_to_start_enabled", True)
+        if reset_enabled:
             pyautogui.press('0')
             print("Seeked YouTube video back to start (pressed '0')")
 
-        # Keep the configured total per video stable even when setup waits change.
+        # Total time to keep this video on screen.
         if duration is not None:
-            time.sleep(duration)
+            watch_seconds = duration
         else:
-            time.sleep(max(0, total_seconds_per_video - setup_seconds))
+            watch_seconds = max(0, total_seconds_per_video - setup_seconds)
+
+        # Instead of one long sleep, optionally re-seek to the start every
+        # `reseek_interval_seconds`. This stops the video from ever reaching its
+        # end, which is where YouTube autoplay jumps to another (often almost
+        # finished) clip and can freeze. Battery draw is unchanged because the
+        # video keeps playing the whole time.
+        reseek_interval = config.get("reseek_interval_seconds", 0)
+        if reset_enabled and reseek_interval and reseek_interval > 0:
+            remaining = watch_seconds
+            while remaining > 0:
+                chunk = min(reseek_interval, remaining)
+                time.sleep(chunk)
+                remaining -= chunk
+                if remaining > 0:
+                    pyautogui.press('0')  # back to start before the video can end
+        else:
+            time.sleep(watch_seconds)
 
         get_battery_level()
         close_active_tab()

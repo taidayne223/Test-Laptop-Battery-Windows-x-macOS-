@@ -54,6 +54,7 @@ DEFAULT_CONFIG = {
         "after_escape_wait_seconds": 0.5,
         "theater_mode_enabled": True,
         "reset_to_start_enabled": True,
+        "reseek_interval_seconds": 60,
     },
     "reporting": {
         "battery_log_interval_seconds": 3,

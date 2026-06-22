@@ -29,7 +29,7 @@ def start_test(no_youtube='0'):
     if (no_youtube == '1'):
         youtube_message = 'YouTube test is disabled'
     else:
-        youtube_message = 'YouTube test is enable'
+        youtube_message = 'YouTube test is enabled'
 
     print(youtube_message)
     logging.info(youtube_message)
