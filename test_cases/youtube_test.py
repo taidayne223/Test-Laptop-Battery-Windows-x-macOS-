@@ -61,6 +61,14 @@ def run_youtube_test(duration=None):
             pyautogui.press(YOUTUBE_THEATER_MODE_KEY)
             print("Switched YouTube to Theater mode")
 
+        # Force the player back to the start of the video before timing begins.
+        # YouTube's autoplay can land on a video that's almost finished and then
+        # freeze (autoplay bug). Pressing '0' seeks to the very beginning so each
+        # test starts from a clean, playing state.
+        if config.get("reset_to_start_enabled", True):
+            pyautogui.press('0')
+            print("Seeked YouTube video back to start (pressed '0')")
+
         # Keep the configured total per video stable even when setup waits change.
         if duration is not None:
             time.sleep(duration)

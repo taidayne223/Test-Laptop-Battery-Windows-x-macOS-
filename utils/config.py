@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
         "reload_wait_seconds": 5,
         "after_escape_wait_seconds": 0.5,
         "theater_mode_enabled": True,
+        "reset_to_start_enabled": True,
     },
     "reporting": {
         "battery_log_interval_seconds": 3,
