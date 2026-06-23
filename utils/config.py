@@ -55,6 +55,8 @@ DEFAULT_CONFIG = {
         "theater_mode_enabled": True,
         "reset_to_start_enabled": True,
         "reseek_interval_seconds": 60,
+        "auto_hard_reload_interval_seconds": 120,
+        "max_auto_hard_reloads": 2,
     },
     "reporting": {
         "battery_log_interval_seconds": 3,

@@ -48,7 +48,9 @@
     "after_escape_wait_seconds": 0.5,
     "theater_mode_enabled": true,
     "reset_to_start_enabled": true,
-    "reseek_interval_seconds": 60
+    "reseek_interval_seconds": 60,
+    "auto_hard_reload_interval_seconds": 120,
+    "max_auto_hard_reloads": 2
   },
   "reporting": {
     "battery_log_interval_seconds": 3
