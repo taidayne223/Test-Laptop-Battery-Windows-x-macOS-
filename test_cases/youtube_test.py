@@ -26,11 +26,13 @@ def _hard_refresh_youtube(platform_name, reload_wait, after_escape_wait):
     time.sleep(after_escape_wait)
 
 
-def _restore_youtube_playback(config, apply_theater_mode=False):
-    if apply_theater_mode and config["theater_mode_enabled"]:
+def _enable_youtube_theater_mode(config):
+    if config["theater_mode_enabled"]:
         pyautogui.press(YOUTUBE_THEATER_MODE_KEY)
         print("Switched YouTube to Theater mode")
 
+
+def _reset_youtube_to_start(config):
     reset_enabled = config.get("reset_to_start_enabled", True)
     if reset_enabled:
         pyautogui.press('0')
@@ -57,7 +59,12 @@ def run_youtube_test(duration=None):
     reload_wait = config["reload_wait_seconds"]
     after_escape_wait = config["after_escape_wait_seconds"]
     total_seconds_per_video = config["total_seconds_per_video"]
-    setup_seconds = page_load_wait + focus_move_seconds + focus_wait + reload_wait + after_escape_wait
+    reload_after_theater = (
+        config["theater_mode_enabled"]
+        and config.get("hard_reload_after_theater_mode_enabled", True)
+    )
+    theater_reload_seconds = reload_wait + after_escape_wait if reload_after_theater else 0
+    setup_seconds = page_load_wait + focus_move_seconds + focus_wait + reload_wait + after_escape_wait + theater_reload_seconds
     auto_hard_reload_interval = config.get("auto_hard_reload_interval_seconds", 0)
     max_auto_hard_reloads = config.get("max_auto_hard_reloads", 0)
 
@@ -82,7 +89,17 @@ def run_youtube_test(duration=None):
         # register when the player/page has keyboard focus, which can be lost
         # during the hard refresh above.
         _focus_youtube_player(screenWidth, screenHeight)
-        _restore_youtube_playback(config, apply_theater_mode=True)
+        _enable_youtube_theater_mode(config)
+
+        # Some YouTube sessions black-screen immediately after switching to
+        # Theater mode. Refresh once more after pressing 't'; YouTube keeps the
+        # Theater preference, and playback usually resumes cleanly after reload.
+        if reload_after_theater:
+            print("Hard-refreshing YouTube after Theater mode switch")
+            _hard_refresh_youtube(platform_name, reload_wait, after_escape_wait)
+            _focus_youtube_player(screenWidth, screenHeight)
+
+        _reset_youtube_to_start(config)
 
         # Force the player back to the start of the video before timing begins.
         # YouTube's autoplay can land on a video that's almost finished and then
@@ -129,7 +146,7 @@ def run_youtube_test(duration=None):
                 print(f"Hard-refreshed YouTube during playback ({hard_reloads_done}/{max_auto_hard_reloads})")
                 _hard_refresh_youtube(platform_name, reload_wait, after_escape_wait)
                 _focus_youtube_player(screenWidth, screenHeight)
-                _restore_youtube_playback(config)
+                _reset_youtube_to_start(config)
 
                 if hard_reloads_done >= max_auto_hard_reloads:
                     next_hard_reload_at = None

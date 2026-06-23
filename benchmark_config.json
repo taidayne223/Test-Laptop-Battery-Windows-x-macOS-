@@ -47,6 +47,7 @@
     "reload_wait_seconds": 5,
     "after_escape_wait_seconds": 0.5,
     "theater_mode_enabled": true,
+    "hard_reload_after_theater_mode_enabled": true,
     "reset_to_start_enabled": true,
     "reseek_interval_seconds": 60,
     "auto_hard_reload_interval_seconds": 120,
