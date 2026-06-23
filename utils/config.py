@@ -52,8 +52,6 @@ DEFAULT_CONFIG = {
         "focus_wait_seconds": 1,
         "reload_wait_seconds": 5,
         "after_escape_wait_seconds": 0.5,
-        "theater_mode_enabled": True,
-        "hard_reload_after_theater_mode_enabled": True,
         "reset_to_start_enabled": True,
         "reseek_interval_seconds": 60,
         "auto_hard_reload_interval_seconds": 120,
