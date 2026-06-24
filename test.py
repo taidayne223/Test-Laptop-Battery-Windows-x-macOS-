@@ -9,6 +9,7 @@ from datetime import datetime
 
 from utils.battery_utils import get_battery_level
 from utils.config import get_config
+from utils.low_battery_popup import start_low_battery_popup_monitor
 from test_cases.office_test import run_office_test
 from test_cases.browser_test import run_browser_test
 from test_cases.youtube_test import run_youtube_test
@@ -64,6 +65,7 @@ def information_process():
 if __name__ == "__main__":
     from utils.system_setup import optimize_system
     optimize_system()
+    start_low_battery_popup_monitor()
 
     parser=argparse.ArgumentParser(description="Run a script and measure battery life")
     parser.add_argument("no_youtube", nargs='?', choices=['1', '0'], default='0')

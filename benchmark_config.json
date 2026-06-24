@@ -54,6 +54,14 @@
   "reporting": {
     "battery_log_interval_seconds": 3
   },
+  "low_battery_popup": {
+    "enabled": true,
+    "threshold_percent": 15,
+    "check_interval_seconds": 2,
+    "rescan_interval_seconds": 10,
+    "command_timeout_seconds": 5,
+    "message_text": "Your battery is running low"
+  },
   "cycle": {
     "youtube_only_restart_wait_seconds": 5,
     "quick_restart_wait_seconds": 3

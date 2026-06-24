@@ -10,6 +10,7 @@ from test_cases.office_test import run_office_test
 from utils.system_setup import optimize_system
 from utils.battery_utils import get_battery_level
 from utils.config import get_config
+from utils.low_battery_popup import start_low_battery_popup_monitor
 
 # Disable fail safe mechanism of Pyautogui
 import pyautogui
@@ -26,6 +27,7 @@ def start_test():
     print("Press Ctrl+C to stop the test.\n")
 
     optimize_system()
+    start_low_battery_popup_monitor()
 
     cycle = 1
     try:

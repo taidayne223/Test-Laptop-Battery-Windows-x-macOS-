@@ -3,6 +3,7 @@ import sys
 from test_cases.youtube_test import run_youtube_test
 from utils.system_setup import optimize_system
 from utils.config import get_config
+from utils.low_battery_popup import start_low_battery_popup_monitor
 
 if __name__ == "__main__":
     config = get_config()
@@ -16,6 +17,7 @@ if __name__ == "__main__":
 
     # Optimize system (volume 0%, screen brightness, etc.)
     optimize_system()
+    start_low_battery_popup_monitor()
 
     try:
         while True:
