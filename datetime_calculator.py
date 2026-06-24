@@ -425,137 +425,114 @@ def get_device_specs():
         
     return "Generic Laptop"
 
+def _capacity_values(capacity, battery_unit, voltage_mv):
+    if capacity is None:
+        return None, None
+
+    try:
+        raw_value = int(capacity)
+    except (TypeError, ValueError):
+        return None, None
+
+    if battery_unit == "mWh":
+        wh_value = raw_value / 1000.0
+    elif battery_unit == "mAh" and voltage_mv:
+        wh_value = (raw_value * voltage_mv) / 1000000.0
+    else:
+        wh_value = None
+
+    return raw_value, wh_value
+
+
+def _format_capacity(capacity, battery_unit, voltage_mv):
+    raw_value, wh_value = _capacity_values(
+        capacity,
+        battery_unit,
+        voltage_mv,
+    )
+    if raw_value is None:
+        return "Unavailable"
+    if wh_value is None:
+        return f"{raw_value:,} {battery_unit}"
+    return f"{wh_value:.1f} Wh ({raw_value:,} {battery_unit})"
+
+
 def generate_report(cycles, design_capacity=None, full_charge_capacity=None, recent_usage=None, battery_unit="mWh", voltage_mv=None):
     device_specs = get_device_specs()
-    report_lines = []
+    design_raw, design_wh = _capacity_values(
+        design_capacity,
+        battery_unit,
+        voltage_mv,
+    )
+    full_raw, full_wh = _capacity_values(
+        full_charge_capacity,
+        battery_unit,
+        voltage_mv,
+    )
+
+    health = None
+    wear = None
+    if design_raw and full_raw is not None:
+        health = (full_raw / design_raw) * 100.0
+        wear = max(0.0, 100.0 - health)
+
+    report_lines = [
+        "=========================================================",
+        "              LAPTOP BATTERY TEST RESULT",
+        "=========================================================",
+        f"Model                 : {device_specs}",
+        f"Battery specs         : {_format_capacity(design_capacity, battery_unit, voltage_mv)}",
+        f"Battery actual        : {_format_capacity(full_charge_capacity, battery_unit, voltage_mv)}",
+    ]
+
+    if wear is not None:
+        report_lines.append(
+            f"Battery wear          : {wear:.1f}% (Health {health:.1f}%)"
+        )
+    else:
+        report_lines.append("Battery wear          : Unavailable")
+
+    for idx, cycle in enumerate(cycles, 1):
+        if len(cycles) > 1:
+            report_lines.extend(["", f"Session #{idx}"])
+
+        duration_seconds = cycle["duration_secs"]
+        duration_minutes = duration_seconds / 60.0
+        duration_hours = duration_seconds / 3600.0
+        report_lines.extend([
+            f"Test started          : {cycle['start_time'].strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Session duration      : {duration_minutes:.1f} minutes ({duration_hours:.2f} hours)",
+        ])
+
+    report_lines.extend([
+        "=========================================================",
+        "DATABASE COPY-PASTE (tab-separated)",
+        "\t".join([
+            "Test Started",
+            "Model",
+            "Battery Specs Wh",
+            "Battery Actual Wh",
+            "Battery Wear %",
+            "Session Minutes",
+        ]),
+    ])
+
+    design_database = f"{design_wh:.1f}" if design_wh is not None else ""
+    full_database = f"{full_wh:.1f}" if full_wh is not None else ""
+    wear_database = f"{wear:.1f}" if wear is not None else ""
+
+    for cycle in cycles:
+        duration_seconds = cycle["duration_secs"]
+        report_lines.append("\t".join([
+            cycle["start_time"].strftime("%Y-%m-%d %H:%M:%S"),
+            device_specs,
+            design_database,
+            full_database,
+            wear_database,
+            f"{duration_seconds / 60.0:.1f}",
+        ]))
+
     report_lines.append("=========================================================")
-    report_lines.append("                    LAPTOP BATTERY TEST REPORT")
-    report_lines.append("=========================================================")
-    report_lines.append(f"Device Name  : {device_specs}")
-    report_lines.append(f"Generated at : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    report_lines.append("")
-    
-    total_completed = 0
-    
-    for idx, c in enumerate(cycles, 1):
-        report_lines.append(f"Cycle #{idx}: {c['status']}")
-        report_lines.append(f"  - Start time           : {c['start_time'].strftime('%Y-%m-%d %H:%M:%S')} (Line {c['start_line']})")
-        report_lines.append(f"  - End time             : {c['end_time'].strftime('%Y-%m-%d %H:%M:%S')} (Line {c['end_line']})")
-        report_lines.append(f"  - Level range          : {c['start_level']}% -> {c['end_level']}% (Dropped {c['start_level'] - c['end_level']}%)")
-        
-        # Display start capacity if parsed from log file (e.g. on macOS or newer log)
-        start_cap_printed = False
-        if c.get('start_capacity') is not None:
-            try:
-                cap_int = int(c['start_capacity'])
-                if battery_unit == "mAh" and voltage_mv:
-                    cap_wh = (cap_int * voltage_mv) / 1000000.0
-                    cap_str = f" ({cap_wh:.1f} Wh)"
-                elif battery_unit == "mWh":
-                    cap_wh = cap_int / 1000.0
-                    cap_str = f" ({cap_wh:.1f} Wh)"
-                else:
-                    cap_str = ""
-                cap_val = f"{cap_int:,} {battery_unit}{cap_str}"
-            except ValueError:
-                cap_val = f"{c['start_capacity']} {battery_unit}"
-            report_lines.append(f"  - Start capacity       : {cap_val} ({c['start_level']}%)")
-            start_cap_printed = True
-            
-        # Fallback to matching powercfg report (Windows) if not printed yet
-        if not start_cap_printed and recent_usage:
-            closest = find_closest_usage(c['start_time'], recent_usage)
-            if closest and closest['capacity_mwh'] is not None:
-                try:
-                    cap_int = int(closest['capacity_mwh'])
-                    cap_wh = cap_int / 1000.0
-                    cap_val = f"{cap_int:,} mWh ({cap_wh:.1f} Wh)"
-                except ValueError:
-                    cap_val = f"{closest['capacity_mwh']} mWh"
-                report_lines.append(f"  - Start capacity       : {cap_val} ({closest['percent']})")
-        
-        dur_secs = c['duration_secs']
-        dur_str = convert_seconds_to_hhmmss(dur_secs)
-        dur_mins = dur_secs / 60.0
-        report_lines.append(f"  - Duration             : {dur_str} ({dur_mins:.1f} minutes)")
-        
-        if dur_secs > 0:
-            drop_pct = c['start_level'] - c['end_level']
-            rate_per_hour = (drop_pct / (dur_secs / 3600.0))
-            report_lines.append(f"  - Discharge rate       : {rate_per_hour:.2f}% per hour")
-        report_lines.append("")
-        
-        if c['status'] == "Completed":
-            total_completed += 1
-            
-    report_lines.append("=========================================================")
-    report_lines.append(f"Summary: Total {len(cycles)} cycles detected ({total_completed} completed).")
-    
-    if design_capacity or full_charge_capacity:
-        report_lines.append("---------------------------------------------------------")
-        report_lines.append("System Battery Capacity:")
-        if design_capacity:
-            try:
-                dc_int = int(design_capacity)
-                if battery_unit == "mAh" and voltage_mv:
-                    dc_wh = (dc_int * voltage_mv) / 1000000.0
-                    dc_str = f" ({dc_wh:.1f} Wh)"
-                elif battery_unit == "mWh":
-                    dc_wh = dc_int / 1000.0
-                    dc_str = f" ({dc_wh:.1f} Wh)"
-                else:
-                    dc_str = ""
-                dc_val = f"{dc_int:,} {battery_unit}{dc_str}"
-            except ValueError:
-                dc_val = f"{design_capacity} {battery_unit}"
-            report_lines.append(f"  - Design capacity      : {dc_val}")
-            
-        if full_charge_capacity:
-            try:
-                fcc_int = int(full_charge_capacity)
-                if battery_unit == "mAh" and voltage_mv:
-                    fcc_wh = (fcc_int * voltage_mv) / 1000000.0
-                    fcc_str = f" ({fcc_wh:.1f} Wh)"
-                elif battery_unit == "mWh":
-                    fcc_wh = fcc_int / 1000.0
-                    fcc_str = f" ({fcc_wh:.1f} Wh)"
-                else:
-                    fcc_str = ""
-                fcc_val = f"{fcc_int:,} {battery_unit}{fcc_str}"
-            except ValueError:
-                fcc_val = f"{full_charge_capacity} {battery_unit}"
-            report_lines.append(f"  - Full charge capacity : {fcc_val}")
-            
-        # Calculate battery health and wear (chai pin)
-        if design_capacity and full_charge_capacity:
-            try:
-                dc_int = int(design_capacity)
-                fcc_int = int(full_charge_capacity)
-                if dc_int > 0:
-                    health = (fcc_int / dc_int) * 100.0
-                    wear = max(0.0, 100.0 - health)
-                    report_lines.append(f"  - Battery health       : {health:.1f}%")
-                    report_lines.append(f"  - Battery wear         : {wear:.1f}%")
-            except ValueError:
-                pass
-            
-    report_lines.append("=========================================================")
-    report_lines.append("Google Sheets Copy-Paste Row (tab-separated):")
-    
-    # Header row
-    header_row = ["Device Specs"]
-    data_row = [device_specs]
-    for idx, c in enumerate(cycles, 1):
-        header_row.extend([f"Cycle #{idx} Dur", f"Cycle #{idx} Mins"])
-        dur_secs = c['duration_secs']
-        dur_str = convert_seconds_to_hhmmss(dur_secs)
-        dur_mins = f"{dur_secs / 60.0:.1f}"
-        data_row.extend([dur_str, dur_mins])
-        
-    report_lines.append("\t".join(header_row))
-    report_lines.append("\t".join(data_row))
-    report_lines.append("=========================================================")
-    
     return "\n".join(report_lines)
 
 def main():
